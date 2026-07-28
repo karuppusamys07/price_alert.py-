@@ -1,0 +1,29 @@
+name: Price Threshold Alert
+
+on:
+  schedule:
+    # Every 15 min, 9:15 AM to 3:30 PM IST (3:45 AM - 10:00 AM UTC), Mon-Fri
+    - cron: "*/15 3-9 * * 1-5"
+    - cron: "0,15,30 10 * * 1-5"
+  workflow_dispatch: {}   # lets you run it manually to test
+
+jobs:
+  check-price:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check price alerts
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: python price_alert.py
