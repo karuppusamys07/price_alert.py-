@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+"""
+Price Threshold Alert -> Telegram
+--------------------------------------------------------
+Checks specific stocks against price levels YOU set.
+If price crosses BELOW your 'buy_below' level, or ABOVE
+your 'sell_above' level, sends a Telegram alert with a
+button that opens Zerodha Kite so you can place the order
+yourself (this script does NOT place trades automatically -
+that needs a paid broker API and carries real financial risk,
+so the final buy/sell decision always stays with you).
+
+Reads BOT_TOKEN and CHAT_ID from environment variables
+(set as GitHub Secrets).
+"""
+
+import os
+import requests
+import yfinance as yf
+
+# ---------------- CONFIG ----------------
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "PASTE_YOUR_BOT_TOKEN_HERE")
+CHAT_ID   = os.environ.get("CHAT_ID", "PASTE_YOUR_CHAT_ID_HERE")
+
+# Edit this: for each stock, set the price levels you care about.
+# buy_below  -> alert when price falls to/below this level
+# sell_above -> alert when price rises to/above this level
+# Leave a value as None if you don't want that alert for a stock.
+PRICE_ALERTS = {
+    "SAIL": {"buy_below": 155, "sell_above": 171},
+    # "RELIANCE": {"buy_below": 2800, "sell_above": 3100},
+    # "TCS": {"buy_below": 3500, "sell_above": None},
+}
+# -----------------------------------------
+
+
+def get_price(symbol):
+    ticker = yf.Ticker(f"{symbol}.NS")
+    try:
+        info = ticker.fast_info
+        return info["last_price"]
+    except Exception as e:
+        print(f"Price fetch failed for {symbol}: {e}")
+        return None
+
+
+def send_alert(symbol, price, level, kind):
+    if kind == "buy":
+        text = (
+            f"🟢 <b>{symbol} - BUY ZONE</b>\n"
+            f"Current price: ₹{price:.2f}\n"
+            f"Crossed below your level: ₹{level:.2f}\n\n"
+            f"Idhu unga set panna 'buy_below' level ah thottiruchu."
+        )
+    else:
+        text = (
+            f"🔴 <b>{symbol} - SELL ZONE</b>\n"
+            f"Current price: ₹{price:.2f}\n"
+            f"Crossed above your level: ₹{level:.2f}\n\n"
+            f"Idhu unga set panna 'sell_above' level ah thottiruchu."
+        )
+
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": CHAT_ID,
+        "text": text,
+        "parse_mode": "HTML",
+        "reply_markup": {
+            "inline_keyboard": [[
+                {"text": "📲 Open in Zerodha Kite", "url": "https://kite.zerodha.com/dashboard"}
+            ]]
+        },
+    }
+    r = requests.post(url, json=payload)
+    if r.status_code != 200:
+        print("Telegram send failed:", r.text)
+    else:
+        print(f"Alert sent for {symbol}")
+
+
+def main():
+    for symbol, levels in PRICE_ALERTS.items():
+        price = get_price(symbol)
+        if price is None:
+            continue
+
+        buy_below = levels.get("buy_below")
+        sell_above = levels.get("sell_above")
+
+        if buy_below is not None and price <= buy_below:
+            send_alert(symbol, price, buy_below, "buy")
+
+        if sell_above is not None and price >= sell_above:
+            send_alert(symbol, price, sell_above, "sell")
+
+
+if __name__ == "__main__":
+    main()
